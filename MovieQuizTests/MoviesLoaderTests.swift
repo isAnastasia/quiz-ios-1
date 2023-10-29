@@ -3,7 +3,7 @@ import XCTest
 @testable import MovieQuiz
 
 struct StubNetworkClient: NetworkRouting {
-    enum TestError: Error { //тестовая ошибка
+    enum TestError: Error {
         case test
     }
     
@@ -50,47 +50,34 @@ struct StubNetworkClient: NetworkRouting {
               }
             """.data(using: .utf8) ?? Data()
         }
-    
-    
 }
 
 class MoviesLoaderTest: XCTestCase {
-    //успешная загрузка
     func testSuccessLoading() throws {
-        //Given
         let stubNetworkClient = StubNetworkClient(emulateError: false)
         let loader = MoviesLoader(networkClient: stubNetworkClient)
         
-        //When
         let expectation = expectation(description: "Loading expectation")
         
         loader.loadMovies { result in
-            //Then
             switch result {
             case .success(let movies):
-                // давайте проверим, что пришло, например, два фильма — ведь в тестовых данных их всего два
                 XCTAssertEqual(movies.items.count, 2)
-                // сравниваем данные с тем, что мы предполагали
                 expectation.fulfill()
             case .failure(_):
                 XCTFail("Unexpected failure")
             }
         }
         waitForExpectations(timeout: 1)
-        
     }
     
-    //ошибка загрузки
     func testFailureLoading() throws {
-        //Given
         let stubNetworkClient = StubNetworkClient(emulateError: true)
         let loader = MoviesLoader(networkClient: stubNetworkClient)
         
-        //When
         let expectation = expectation(description: "Loading expectation")
         
         loader.loadMovies { result in
-            //Then
             switch result {
             case .success(_):
                 XCTFail("Unexpected failure")

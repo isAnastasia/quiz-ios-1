@@ -2,44 +2,23 @@ import Foundation
 import UIKit
 
 final class MovieQuizPresenter: QuestionFactoryDelegate {
+    private var statisticService: StatisticService!
     private var questionFactory: QuestionFactoryProtocol?
-    private weak var viewController: MovieQuizViewController?
+    private weak var viewController: MovieQuizViewControllerProtocol?
     
     private var currentQuestionIndex: Int = 0
-    let questionsAmount: Int = 10
-    var correctAnswers: Int = 0
-    var currentQuestion: QuizQuestion?
+    private let questionsAmount: Int = 10
+    private var correctAnswers: Int = 0
+    private var currentQuestion: QuizQuestion?
     
-    init(viewController: MovieQuizViewController) {
+    init(viewController: MovieQuizViewControllerProtocol) {
         self.viewController = viewController
+        
+        statisticService = StatisticServiceImplementation()
             
         questionFactory = QuestionFactory(delegate: self, moviesLoader: MoviesLoader())
         questionFactory?.loadData()
         viewController.showLoadingIndicator()
-    }
-    
-    // MARK: - QuestionFactoryDelegate
-    
-    func didLoadDataFromServer() {
-        viewController?.hideLoadingIndicator()
-        questionFactory?.requestNextQuestion()
-    }
-    
-    func didFailToLoadData(with error: Error) {
-        let message = error.localizedDescription
-        viewController?.showNetworkError(message: message)
-    }
-    
-    func didReceiveNextQuestion(question: QuizQuestion?) {
-        guard let question = question else {
-            return
-        }
-        
-        currentQuestion = question
-        let viewModel = convert(model: question)
-        DispatchQueue.main.async { [weak self] in
-            self?.viewController?.show(quiz: viewModel)
-        }
     }
     
     func isLastQuestion() -> Bool {
@@ -74,7 +53,65 @@ final class MovieQuizPresenter: QuestionFactoryDelegate {
         return questionStep
     }
     
-    func showNextQuestionOrResults() {
+    func didAnswer(isCorrectAnswer: Bool) {
+        if isCorrectAnswer {
+            correctAnswers += 1
+        }
+    }
+    
+    func makeResultMessage() -> String {
+        statisticService.store(correct: correctAnswers, total: questionsAmount)
+
+        let date = getCurrentDate(date: statisticService.bestGame.date)
+        
+        let resultMessage = """
+            Ваш результат: \(correctAnswers)/\(questionsAmount)
+            Количество сыгранных квизов: \(statisticService.gamesCount)
+            Рекорд \(statisticService.bestGame.correct)/\(statisticService.bestGame.total) (\(date))
+            Средняя точность \(String(format: "%.2f",statisticService.totalAccuracy))%
+        """
+        return resultMessage
+    }
+    
+    // MARK: - QuestionFactoryDelegate
+    
+    func didLoadDataFromServer() {
+        viewController?.hideLoadingIndicator()
+        questionFactory?.requestNextQuestion()
+    }
+    
+    func didFailToLoadData(with error: Error) {
+        let message = error.localizedDescription
+        viewController?.showNetworkError(message: message)
+    }
+    
+    func didReceiveNextQuestion(question: QuizQuestion?) {
+        guard let question = question else {
+            return
+        }
+        
+        currentQuestion = question
+        let viewModel = convert(model: question)
+        DispatchQueue.main.async { [weak self] in
+            self?.viewController?.show(quiz: viewModel)
+        }
+    }
+    
+    // MARK: - Private methods
+
+    private func proceedWithAnswer(isCorrect: Bool) {
+        didAnswer(isCorrectAnswer: isCorrect)
+        
+        viewController?.highlightImageBorder(isCorrectAnswer: isCorrect)
+        viewController?.disableButtons()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self = self else { return }
+            self.proceedToNextQuestionOrResults()
+        }
+    }
+    
+    private func proceedToNextQuestionOrResults() {
         if self.isLastQuestion() {
             let viewModel = QuizResultsViewModel(
                 title: "Этот раунд окончен!",
@@ -88,21 +125,20 @@ final class MovieQuizPresenter: QuestionFactoryDelegate {
         }
     }
     
-    // MARK: - private functions
-    func didAnswer(isCorrectAnswer: Bool) {
-            if isCorrectAnswer {
-                correctAnswers += 1
-            }
-        }
-    
-    
-    func didAnswer(isYes: Bool) {
+    private func didAnswer(isYes: Bool) {
         guard let currentQuestion = currentQuestion else {
             return
         }
                 
         let givenAnswer = isYes
                 
-        viewController?.showAnswerResult(isCorrect: givenAnswer == currentQuestion.correctAnswer)
+        proceedWithAnswer(isCorrect: givenAnswer == currentQuestion.correctAnswer)
+    }
+    
+    private func getCurrentDate (date: Date) -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "dd.MM.yy hh:mm"
+        let dateFormatted = dateFormatter.string(from: date)
+        return dateFormatted
     }
 } 
