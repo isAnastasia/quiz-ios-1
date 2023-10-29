@@ -18,6 +18,8 @@ final class ResultAlertPresenter: AlertPresenterDelegate {
             message: alertModel.message,
             preferredStyle: .alert)
         
+        alert.view.accessibilityIdentifier = "Results"
+        
         let action = UIAlertAction(title: alertModel.buttonText, style: .cancel) {_ in
             alertModel.completion()
         }
